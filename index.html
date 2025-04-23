@@ -1,19 +1,501 @@
-<!doctype html>
-<html>
-	<head>
-		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width" />
-		<title>My static Space</title>
-		<link rel="stylesheet" href="style.css" />
-	</head>
-	<body>
-		<div class="card">
-			<h1>Welcome to your static Space!</h1>
-			<p>You can modify this app directly by editing <i>index.html</i> in the Files and versions tab.</p>
-			<p>
-				Also don't forget to check the
-				<a href="https://huggingface.co/docs/hub/spaces" target="_blank">Spaces documentation</a>.
-			</p>
-		</div>
-	</body>
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web3 Колесо Фортуны | Telegram Mini App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.5.2/dist/web3.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .wheel-container {
+            position: relative;
+            width: 400px;
+            height: 400px;
+            margin: 0 auto;
+        }
+        
+        .wheel {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            border-radius: 50%;
+            overflow: hidden;
+            box-shadow: 0 0 0 10px #222, 0 0 30px rgba(0,0,0,0.7);
+            transition: transform 5s cubic-bezier(0.17, 0.67, 0.12, 0.99);
+            transform: rotate(0deg);
+            border: 8px solid #111;
+        }
+        
+        .wheel-center {
+            position: absolute;
+            width: 70px;
+            height: 70px;
+            background: #fff;
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            box-shadow: 0 0 15px rgba(0,0,0,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 4px solid #ddd;
+        }
+        
+        .wheel-pointer {
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 25px solid transparent;
+            border-right: 25px solid transparent;
+            border-top: 50px solid #ff5722;
+            z-index: 5;
+            filter: drop-shadow(0 0 8px rgba(0,0,0,0.7));
+        }
+        
+        .wheel-pointer::after {
+            content: '';
+            position: absolute;
+            top: -35px;
+            left: -15px;
+            width: 30px;
+            height: 30px;
+            background: #ff5722;
+            border-radius: 50%;
+            z-index: -1;
+        }
+        
+        .wheel-spin {
+            animation: spin 2s linear infinite;
+        }
+        
+        .prize-popup {
+            animation: pop 0.5s ease-out;
+        }
+        
+        @keyframes pop {
+            0% { transform: scale(0.5); opacity: 0; }
+            80% { transform: scale(1.1); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, #6e45e2 0%, #89d4cf 100%);
+        }
+        
+        .metamask-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+        }
+        
+        .ticket {
+            background: linear-gradient(45deg, #f6d365 0%, #fda085 100%);
+        }
+        
+        .wheel-segment {
+            position: absolute;
+            width: 50%;
+            height: 50%;
+            transform-origin: bottom right;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            clip-path: polygon(0 0, 100% 0, 100% 100%);
+        }
+        
+        .wheel-segment-text {
+            position: absolute;
+            width: 100px;
+            text-align: center;
+            transform-origin: center;
+            font-weight: bold;
+            color: white;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.7);
+            font-size: 14px;
+            transform: rotate(calc(var(--rotation) + 11.25deg)) translateX(120px);
+            z-index: 2;
+        }
+        
+        .wheel-segment-border {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-right: 2px solid rgba(255,255,255,0.3);
+        }
+        
+        .wheel-segment-inner {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.1);
+            clip-path: polygon(0 0, 100% 0, 100% 100%);
+        }
+        
+        .sparkle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: white;
+            border-radius: 50%;
+            opacity: 0.8;
+            animation: sparkle 2s infinite;
+        }
+        
+        @keyframes sparkle {
+            0% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.5); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.8; }
+        }
+        
+        .glow {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0) 70%);
+            z-index: 1;
+        }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen text-white font-sans">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="flex justify-between items-center mb-8">
+            <div class="flex items-center">
+                <i class="fas fa-coins text-3xl mr-3 text-yellow-300"></i>
+                <h1 class="text-2xl font-bold">Web3 Fortune</h1>
+            </div>
+            <div class="flex items-center space-x-4">
+                <button id="connectWallet" class="metamask-btn bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-full flex items-center transition-all duration-300">
+                    <i class="fab fa-ethereum mr-2"></i>
+                    <span id="walletText">Connect Wallet</span>
+                </button>
+                <button class="bg-gray-800 hover:bg-gray-700 text-white p-2 rounded-full">
+                    <i class="fas fa-cog"></i>
+                </button>
+            </div>
+        </header>
+        
+        <!-- Main Content -->
+        <main class="flex flex-col items-center">
+            <!-- Balance Info -->
+            <div class="bg-black bg-opacity-30 rounded-xl p-4 mb-8 w-full max-w-md backdrop-blur-sm">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <p class="text-gray-300">Ваш баланс:</p>
+                        <p class="text-2xl font-bold" id="userBalance">0.00 ETH</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-gray-300">Билеты:</p>
+                        <div class="flex items-center justify-end">
+                            <div class="ticket px-3 py-1 rounded-full mr-2">
+                                <span class="font-bold" id="ticketCount">0</span>
+                            </div>
+                            <button class="bg-purple-600 hover:bg-purple-700 px-3 py-1 rounded-full text-sm">
+                                Купить
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Wheel Container -->
+            <div class="wheel-container mb-12">
+                <div class="wheel-pointer"></div>
+                <div class="wheel" id="wheel">
+                    <div class="glow"></div>
+                    <!-- Wheel segments will be added by JS -->
+                </div>
+                <div class="wheel-center">
+                    <button id="spinButton" class="w-12 h-12 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center text-white font-bold text-lg transition-all shadow-lg">
+                        <i class="fas fa-play"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Info Section -->
+            <div class="bg-black bg-opacity-30 rounded-xl p-6 mb-8 w-full max-w-2xl backdrop-blur-sm">
+                <h2 class="text-xl font-bold mb-4 flex items-center">
+                    <i class="fas fa-info-circle mr-2 text-blue-300"></i> Как играть?
+                </h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-gray-800 bg-opacity-50 p-4 rounded-lg">
+                        <div class="flex items-center mb-2">
+                            <div class="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center mr-2">
+                                <span class="font-bold">1</span>
+                            </div>
+                            <h3 class="font-semibold">Подключите кошелек</h3>
+                        </div>
+                        <p class="text-gray-300 text-sm">Используйте MetaMask или любой Web3-кошелек для подключения</p>
+                    </div>
+                    <div class="bg-gray-800 bg-opacity-50 p-4 rounded-lg">
+                        <div class="flex items-center mb-2">
+                            <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center mr-2">
+                                <span class="font-bold">2</span>
+                            </div>
+                            <h3 class="font-semibold">Получите билеты</h3>
+                        </div>
+                        <p class="text-gray-300 text-sm">Купите или получите бесплатные билеты для игры</p>
+                    </div>
+                    <div class="bg-gray-800 bg-opacity-50 p-4 rounded-lg">
+                        <div class="flex items-center mb-2">
+                            <div class="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center mr-2">
+                                <span class="font-bold">3</span>
+                            </div>
+                            <h3 class="font-semibold">Крутите колесо</h3>
+                        </div>
+                        <p class="text-gray-300 text-sm">Используйте билет для вращения колеса и выигрыша призов</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Recent Winners -->
+            <div class="bg-black bg-opacity-30 rounded-xl p-6 w-full max-w-2xl backdrop-blur-sm">
+                <h2 class="text-xl font-bold mb-4 flex items-center">
+                    <i class="fas fa-trophy mr-2 text-yellow-300"></i> Последние победители
+                </h2>
+                <div class="space-y-3" id="winnersList">
+                    <!-- Winners will be added by JS -->
+                    <div class="flex justify-between items-center bg-gray-800 bg-opacity-50 p-3 rounded-lg">
+                        <div class="flex items-center">
+                            <div class="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center mr-3">
+                                <i class="fas fa-user"></i>
+                            </div>
+                            <span>0x7f...3a4b</span>
+                        </div>
+                        <span class="font-bold text-green-400">0.5 ETH</span>
+                    </div>
+                    <div class="flex justify-between items-center bg-gray-800 bg-opacity-50 p-3 rounded-lg">
+                        <div class="flex items-center">
+                            <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center mr-3">
+                                <i class="fas fa-user"></i>
+                            </div>
+                            <span>0x3d...8c2f</span>
+                        </div>
+                        <span class="font-bold text-yellow-400">NFT</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+        
+        <!-- Prize Popup -->
+        <div id="prizePopup" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-70 z-50 hidden">
+            <div class="prize-popup bg-gradient-to-br from-purple-600 to-blue-500 p-8 rounded-2xl max-w-sm w-full text-center shadow-2xl">
+                <div class="w-20 h-20 bg-yellow-400 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
+                    <i class="fas fa-trophy text-3xl text-yellow-800"></i>
+                </div>
+                <h2 class="text-2xl font-bold mb-2">Поздравляем!</h2>
+                <p class="text-xl mb-6">Вы выиграли: <span id="prizeAmount" class="font-bold">0.1 ETH</span></p>
+                <div class="flex space-x-4">
+                    <button id="claimPrize" class="flex-1 bg-green-500 hover:bg-green-600 text-white py-3 rounded-xl font-bold transition-all">
+                        Забрать
+                    </button>
+                    <button id="closePopup" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 rounded-xl font-bold transition-all">
+                        Закрыть
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize Web3
+            let web3;
+            let account;
+            
+            // Wheel configuration
+            const prizes = [
+                { text: "0.1 ETH", color: "#4CAF50", value: 0.1 },
+                { text: "0.05 ETH", color: "#8BC34A", value: 0.05 },
+                { text: "NFT", color: "#00BCD4", value: "NFT" },
+                { text: "2 билета", color: "#2196F3", value: 2 },
+                { text: "0.2 ETH", color: "#3F51B5", value: 0.2 },
+                { text: "0.01 ETH", color: "#9C27B0", value: 0.01 },
+                { text: "1 билет", color: "#E91E63", value: 1 },
+                { text: "0.5 ETH", color: "#FF5722", value: 0.5 }
+            ];
+            
+            // Create wheel segments
+            const wheel = document.getElementById('wheel');
+            const segmentAngle = 360 / prizes.length;
+            
+            prizes.forEach((prize, index) => {
+                const segment = document.createElement('div');
+                segment.className = 'wheel-segment';
+                segment.style.transform = `rotate(${index * segmentAngle}deg)`;
+                segment.style.backgroundColor = prize.color;
+                
+                // Add inner segment for depth effect
+                const innerSegment = document.createElement('div');
+                innerSegment.className = 'wheel-segment-inner';
+                segment.appendChild(innerSegment);
+                
+                // Add border between segments
+                const border = document.createElement('div');
+                border.className = 'wheel-segment-border';
+                segment.appendChild(border);
+                
+                // Add text
+                const text = document.createElement('div');
+                text.className = 'wheel-segment-text';
+                text.textContent = prize.text;
+                text.style.setProperty('--rotation', `${index * segmentAngle}deg`);
+                segment.appendChild(text);
+                
+                // Add sparkles for visual effect
+                for (let i = 0; i < 3; i++) {
+                    const sparkle = document.createElement('div');
+                    sparkle.className = 'sparkle';
+                    sparkle.style.left = `${Math.random() * 40 + 10}%`;
+                    sparkle.style.top = `${Math.random() * 40 + 10}%`;
+                    sparkle.style.animationDelay = `${Math.random() * 2}s`;
+                    segment.appendChild(sparkle);
+                }
+                
+                wheel.appendChild(segment);
+            });
+            
+            // Connect Wallet
+            document.getElementById('connectWallet').addEventListener('click', async function() {
+                if (typeof window.ethereum !== 'undefined') {
+                    try {
+                        web3 = new Web3(window.ethereum);
+                        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                        account = accounts[0];
+                        
+                        // Update UI
+                        document.getElementById('walletText').textContent = account.substring(0, 6) + '...' + account.substring(38);
+                        document.getElementById('connectWallet').classList.remove('bg-orange-500');
+                        document.getElementById('connectWallet').classList.add('bg-green-600');
+                        
+                        // Get balance (simulated)
+                        const balance = Math.random() * 2;
+                        document.getElementById('userBalance').textContent = balance.toFixed(2) + ' ETH';
+                        
+                        // Give some tickets
+                        document.getElementById('ticketCount').textContent = '3';
+                        
+                    } catch (error) {
+                        console.error(error);
+                        alert('Ошибка подключения кошелька');
+                    }
+                } else {
+                    alert('Пожалуйста, установите MetaMask или другой Web3 кошелек');
+                }
+            });
+            
+            // Spin wheel
+            document.getElementById('spinButton').addEventListener('click', function() {
+                const ticketCount = parseInt(document.getElementById('ticketCount').textContent);
+                
+                if (ticketCount <= 0) {
+                    alert('У вас нет билетов! Купите или получите бесплатные билеты.');
+                    return;
+                }
+                
+                if (document.getElementById('wheel').classList.contains('wheel-spin')) {
+                    return;
+                }
+                
+                // Deduct ticket
+                document.getElementById('ticketCount').textContent = ticketCount - 1;
+                
+                // Disable button during spin
+                this.disabled = true;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                
+                // Random rotation (5-10 full rotations + random segment)
+                const rotations = 5 + Math.floor(Math.random() * 5);
+                const randomPrizeIndex = Math.floor(Math.random() * prizes.length);
+                const rotationAngle = rotations * 360 + (360 - (randomPrizeIndex * segmentAngle + segmentAngle / 2));
+                
+                // Apply rotation
+                document.getElementById('wheel').style.transform = `rotate(${rotationAngle}deg)`;
+                
+                // Show prize after spin
+                setTimeout(() => {
+                    this.disabled = false;
+                    this.innerHTML = '<i class="fas fa-play"></i>';
+                    showPrize(prizes[randomPrizeIndex]);
+                }, 5000);
+            });
+            
+            // Show prize
+            function showPrize(prize) {
+                document.getElementById('prizeAmount').textContent = prize.text;
+                document.getElementById('prizePopup').classList.remove('hidden');
+                
+                // Add to winners list
+                const winnersList = document.getElementById('winnersList');
+                const winnerElement = document.createElement('div');
+                winnerElement.className = 'flex justify-between items-center bg-gray-800 bg-opacity-50 p-3 rounded-lg';
+                winnerElement.innerHTML = `
+                    <div class="flex items-center">
+                        <div class="w-8 h-8 ${prize.value === "NFT" ? 'bg-blue-600' : 'bg-purple-600'} rounded-full flex items-center justify-center mr-3">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <span>${account ? account.substring(0, 4) + '...' + account.substring(38) : 'Вы'}</span>
+                    </div>
+                    <span class="font-bold ${typeof prize.value === 'number' && prize.value >= 0.1 ? 'text-green-400' : 'text-yellow-400'}">${prize.text}</span>
+                `;
+                winnersList.insertBefore(winnerElement, winnersList.firstChild);
+                
+                // Keep only 5 winners
+                if (winnersList.children.length > 5) {
+                    winnersList.removeChild(winnersList.lastChild);
+                }
+            }
+            
+            // Close popup
+            document.getElementById('closePopup').addEventListener('click', function() {
+                document.getElementById('prizePopup').classList.add('hidden');
+            });
+            
+            // Claim prize (simulated)
+            document.getElementById('claimPrize').addEventListener('click', function() {
+                alert('Приз успешно зачислен на ваш счет!');
+                document.getElementById('prizePopup').classList.add('hidden');
+                
+                // Update balance (simulated)
+                if (account) {
+                    const currentBalance = parseFloat(document.getElementById('userBalance').textContent.split(' ')[0]);
+                    const newBalance = currentBalance + 0.1; // Just for demo
+                    document.getElementById('userBalance').textContent = newBalance.toFixed(2) + ' ETH';
+                }
+            });
+            
+            // Telegram Mini Apps integration
+            if (window.Telegram && window.Telegram.WebApp) {
+                const tgWebApp = window.Telegram.WebApp;
+                
+                // Expand the app to full viewport
+                tgWebApp.expand();
+                
+                // Change theme according to Telegram
+                if (tgWebApp.colorScheme === 'dark') {
+                    document.body.classList.remove('gradient-bg');
+                    document.body.classList.add('bg-gray-900');
+                }
+                
+                // Handle back button
+                tgWebApp.BackButton.show();
+                tgWebApp.BackButton.onClick(function() {
+                    tgWebApp.close();
+                });
+            }
+        });
+    </script>
+<p style="border-radius: 8px; text-align: center; font-size: 12px; color: #fff; margin-top: 16px;position: fixed; left: 8px; bottom: 8px; z-index: 10; background: rgba(0, 0, 0, 0.8); padding: 4px 8px;">Made with <img src="https://enzostvs-deepsite.hf.space/logo.svg" alt="DeepSite Logo" style="width: 16px; height: 16px; vertical-align: middle;display:inline-block;margin-right:3px;filter:brightness(0) invert(1);"><a href="https://enzostvs-deepsite.hf.space" style="color: #fff;text-decoration: underline;" target="_blank" >DeepSite</a> - 🧬 <a href="https://enzostvs-deepsite.hf.space?remix=kas012/fortunebot" style="color: #fff;text-decoration: underline;" target="_blank" >Remix</a></p></body>
 </html>
